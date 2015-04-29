@@ -41,13 +41,13 @@
 /* GRAIN INFORMATION STRUCTURE                                                                                          */
 /************************************************************************************************************************/
 typedef struct cmgrainsinfo {
-	short busy;
-	long grainpos;
-	long start;
-	long t_length;
-	long gr_length;
-	double pan_left;
-	double pan_right;
+	short *busy;
+	long *grainpos;
+	long *start;
+	long *t_length;
+	long *gr_length;
+	double *pan_left;
+	double *pan_right;
 } cm_grainsinfo;
 
 
@@ -210,13 +210,13 @@ void *cmgrainlabs_new(t_symbol *s, long argc, t_atom *argv) {
 	
 	// INITIALIZE VALUES FOR THE GRAINSINFO ARRAY
 	for (i = 0; i < MAXGRAINS; i++) {
-		x->grains[i]->busy = 0;
-		x->grains[i]->grainpos = 0;
-		x->grains[i]->start = 0;
-		x->grains[i]->t_length = 0;
-		x->grains[i]->gr_length = 0;
-		x->grains[i]->pan_left = 0.0;
-		x->grains[i]->pan_right = 0.0;
+		x->grains[i]->busy = (short *)sysmem_newptr(sizeof(short *));
+		x->grains[i]->grainpos = (long *)sysmem_newptr(sizeof(long *));
+		x->grains[i]->start = (long *)sysmem_newptr(sizeof(long *));
+		x->grains[i]->t_length = (long *)sysmem_newptr(sizeof(long *));
+		x->grains[i]->gr_length = (long *)sysmem_newptr(sizeof(long *));
+		x->grains[i]->pan_left = (double *)sysmem_newptr(sizeof(double *));
+		x->grains[i]->pan_right = (double *)sysmem_newptr(sizeof(double *));
 	}
 	
 	/************************************************************************************************************************/
