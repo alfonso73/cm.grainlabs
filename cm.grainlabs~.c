@@ -46,7 +46,8 @@ typedef struct cmgrainsinfo {
 	long start;
 	long t_length;
 	long gr_length;
-	cm_panstruct paninfo;
+	double pan_left;
+	double pan_right;
 } cm_grainsinfo;
 
 
@@ -165,6 +166,7 @@ int C74_EXPORT main(void) {
 /* NEW INSTANCE ROUTINE                                                                                                 */
 /************************************************************************************************************************/
 void *cmgrainlabs_new(t_symbol *s, long argc, t_atom *argv) {
+	int i; // for loop counter
 	t_cmgrainlabs *x = (t_cmgrainlabs *)object_alloc(cmgrainlabs_class); // create the object and allocate required memory
 	dsp_setup((t_pxobject *)x, 9); // create 9 inlets
 	
@@ -200,12 +202,22 @@ void *cmgrainlabs_new(t_symbol *s, long argc, t_atom *argv) {
 	
 	/************************************************************************************************************************/
 	// ALLOCATE MEMORY FOR THE GRAINSINFO ARRAY
-	x->grains = (cm_grainsinfo *)sysmem_newptrclear((MAXGRAINS) * sizeof(cm_grainsinfo *));
+	x->grains = (cm_grainsinfo *)sysmem_newptr((MAXGRAINS) * sizeof(cm_grainsinfo *));
 	if (x->grains == NULL) {
 		object_error((t_object *)x, "out of memory");
 		return NULL;
 	}
 	
+	// INITIALIZE VALUES FOR THE GRAINSINFO ARRAY
+	for (i = 0; i < MAXGRAINS; i++) {
+		x->grains[i].busy = 0;
+		x->grains[i].grainpos = 0;
+		x->grains[i].start = 0;
+		x->grains[i].t_length = 0;
+		x->grains[i].gr_length = 0;
+		x->grains[i].pan_left = 0.0;
+		x->grains[i].pan_right = 0.0;
+	}
 	
 	/************************************************************************************************************************/
 	// INITIALIZE VALUES
@@ -272,6 +284,7 @@ void cmgrainlabs_perform64(t_cmgrainlabs *x, t_object *dsp64, double **ins, long
 	double outsample_left = 0.0; // temporary left output sample used for adding up all grain samples
 	double outsample_right = 0.0; // temporary right output sample used for adding up all grain samples
 	int slot = 0; // variable for the current slot in the arrays to write grain info to
+	cm_panstruct pan_in; // temporary pan information structure (maybe not necessary)
 	
 	// OUTLETS
 	t_double *out_left 	= (t_double *)outs[0]; // assign pointer to left output
@@ -387,8 +400,12 @@ void cmgrainlabs_perform64(t_cmgrainlabs *x, t_object *dsp64, double **ins, long
 			if (pan > 1.0) {
 				pan = 1.0;
 			}
-			cm_panning(&x->grains[slot].paninfo, &pan); // calculate pan values in the panstructure within the grain structure
-			// function needs a pointer; IS THIS CORRECT?? Cannot validate bc writing on iPad.
+			// CALCULATE PANNING INFORMATION
+			cm_panning(&pan_in, &pan); // calculate pan values inside the panstructure
+			
+			// WRITE PAN VALUES INTO GRAINSINFO STRUCTURE
+			x->grains[slot].pan_left = pan_in.left;
+			x->grains[slot].pan_right = pan_in.right;
 			
 			/************************************************************************************************************************/
 			// GET RANDOM PITCH
@@ -458,23 +475,23 @@ void cmgrainlabs_perform64(t_cmgrainlabs *x, t_object *dsp64, double **ins, long
 					
 					if (b_channelcount > 1 && x->attr_stereo) { // if more than one channel
 						if (x->attr_sinterp) {
-							outsample_left += (cm_lininterp(distance, b_sample, b_channelcount, 0) * w_read) * x->grains[i].paninfo.left; // get interpolated sample
-							outsample_right += (cm_lininterp(distance, b_sample, b_channelcount, 1) * w_read) * x->grains[i].paninfo.right;
+							outsample_left += (cm_lininterp(distance, b_sample, b_channelcount, 0) * w_read) * x->grains[i].pan_left; // get interpolated sample
+							outsample_right += (cm_lininterp(distance, b_sample, b_channelcount, 1) * w_read) * x->grains[i].pan_right;
 						}
 						else {
-							outsample_left += (b_sample[(long)distance * b_channelcount] * w_read) * x->grains[i].paninfo.left;
-							outsample_right += (b_sample[((long)distance * b_channelcount) + 1] * w_read) * x->grains[i].paninfo.right;
+							outsample_left += (b_sample[(long)distance * b_channelcount] * w_read) * x->grains[i].pan_left;
+							outsample_right += (b_sample[((long)distance * b_channelcount) + 1] * w_read) * x->grains[i].pan_right;
 						}
 					}
 					else {
 						if (x->attr_sinterp) {
 							b_read = cm_lininterp(distance, b_sample, b_channelcount, 0) * w_read; // get interpolated sample
-							outsample_left += b_read * x->grains[i].paninfo.left;
-							outsample_right += b_read * x->grains[i].paninfo.right;
+							outsample_left += b_read * x->grains[i].pan_left;
+							outsample_right += b_read * x->grains[i].pan_right;
 						}
 						else {
-							outsample_left += (b_sample[(long)distance * b_channelcount] * w_read) * x->grains[i].paninfo.left;
-							outsample_right += (b_sample[(long)distance * b_channelcount] * w_read) * x->grains[i].paninfo.right;
+							outsample_left += (b_sample[(long)distance * b_channelcount] * w_read) * x->grains[i].pan_left;
+							outsample_right += (b_sample[(long)distance * b_channelcount] * w_read) * x->grains[i].pan_right;
 						}
 					}
 					if (x->grains[i].grainpos == x->grains[i].t_length) { // if current grain has reached the end position
