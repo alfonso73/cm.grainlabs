@@ -70,7 +70,7 @@ typedef struct _cmgrainlabs {
 	double panmin_float; // used to store the min pan value received from the float inlet
 	double panmax_float; // used to store the max pan value received from the float inlet
 	short connect_status[8]; // array for signal inlet connection statuses
-	cm_grainsinfo *grains; // pointer to struct for grain storing grain playback information
+	cm_grainsinfo *grains[MAXGRAINS]; // pointer to struct for grain storing grain playback information
 	double tr_prev; // trigger sample from previous signal vector (required to check if input ramp resets to zero)
 	short grains_limit; // user defined maximum number of grains
 	short grains_limit_old; // used to store the previous grains count limit when user changes the limit via the "limit" message
@@ -202,21 +202,21 @@ void *cmgrainlabs_new(t_symbol *s, long argc, t_atom *argv) {
 	
 	/************************************************************************************************************************/
 	// ALLOCATE MEMORY FOR THE GRAINSINFO ARRAY
-	x->grains = (cm_grainsinfo *)sysmem_newptr((MAXGRAINS) * sizeof(cm_grainsinfo *));
-	if (x->grains == NULL) {
-		object_error((t_object *)x, "out of memory");
-		return NULL;
-	}
+//	x->grains = (cm_grainsinfo *)sysmem_newptr((MAXGRAINS) * sizeof(cm_grainsinfo *));
+//	if (x->grains == NULL) {
+//		object_error((t_object *)x, "out of memory");
+//		return NULL;
+//	}
 	
 	// INITIALIZE VALUES FOR THE GRAINSINFO ARRAY
 	for (i = 0; i < MAXGRAINS; i++) {
-		x->grains[i].busy = 0;
-		x->grains[i].grainpos = 0;
-		x->grains[i].start = 0;
-		x->grains[i].t_length = 0;
-		x->grains[i].gr_length = 0;
-		x->grains[i].pan_left = 0.0;
-		x->grains[i].pan_right = 0.0;
+		x->grains[i]->busy = 0;
+		x->grains[i]->grainpos = 0;
+		x->grains[i]->start = 0;
+		x->grains[i]->t_length = 0;
+		x->grains[i]->gr_length = 0;
+		x->grains[i]->pan_left = 0.0;
+		x->grains[i]->pan_right = 0.0;
 	}
 	
 	/************************************************************************************************************************/
@@ -342,7 +342,7 @@ void cmgrainlabs_perform64(t_cmgrainlabs *x, t_object *dsp64, double **ins, long
 		
 		if (x->buffer_modified) { // reset all playback information when any of the buffers was modified
 			for (i = 0; i < MAXGRAINS; i++) {
-				x->grains[i].busy = 0;
+				x->grains[i]->busy = 0;
 			}
 			x->grains_count = 0;
 			x->buffer_modified = 0;
@@ -355,8 +355,8 @@ void cmgrainlabs_perform64(t_cmgrainlabs *x, t_object *dsp64, double **ins, long
 			// FIND A FREE SLOT FOR THE NEW GRAIN
 			i = 0;
 			while (i < x->grains_limit) {
-				if (!x->grains[i].busy) {
-					x->grains[i].busy = 1;
+				if (!x->grains[i]->busy) {
+					x->grains[i]->busy = 1;
 					slot = i;
 					break;
 				}
@@ -365,25 +365,25 @@ void cmgrainlabs_perform64(t_cmgrainlabs *x, t_object *dsp64, double **ins, long
 			/************************************************************************************************************************/
 			// GET RANDOM START POSITION
 			if (startmin != startmax) { // only call random function when min and max values are not the same!
-				x->grains[slot].start = (long)cm_random(&startmin, &startmax);
+				x->grains[slot]->start = (long)cm_random(&startmin, &startmax);
 			}
 			else {
-				x->grains[slot].start = startmin;
+				x->grains[slot]->start = startmin;
 			}
 			/************************************************************************************************************************/
 			// GET RANDOM LENGTH
 			if (lengthmin != lengthmax) { // only call random function when min and max values are not the same!
-				x->grains[slot].t_length = (long)cm_random(&lengthmin, &lengthmax);
+				x->grains[slot]->t_length = (long)cm_random(&lengthmin, &lengthmax);
 			}
 			else {
-				x->grains[slot].t_length = lengthmin;
+				x->grains[slot]->t_length = lengthmin;
 			}
 			// CHECK IF THE VALUE FOR PERCEPTIBLE GRAIN LENGTH IS LEGAL
-			if (x->grains[slot].t_length > MAX_GRAINLENGTH * x->m_sr) { // if grain length is larger than the max grain length
-				x->grains[slot].t_length = MAX_GRAINLENGTH * x->m_sr; // set grain length to max grain length
+			if (x->grains[slot]->t_length > MAX_GRAINLENGTH * x->m_sr) { // if grain length is larger than the max grain length
+				x->grains[slot]->t_length = MAX_GRAINLENGTH * x->m_sr; // set grain length to max grain length
 			}
-			else if (x->grains[slot].t_length < MIN_GRAINLENGTH * x->m_sr) { // if grain length is samller than the min grain length
-				x->grains[slot].t_length = MIN_GRAINLENGTH * x->m_sr; // set grain length to min grain length
+			else if (x->grains[slot]->t_length < MIN_GRAINLENGTH * x->m_sr) { // if grain length is samller than the min grain length
+				x->grains[slot]->t_length = MIN_GRAINLENGTH * x->m_sr; // set grain length to min grain length
 			}
 			/************************************************************************************************************************/
 			// GET RANDOM PAN
@@ -404,8 +404,8 @@ void cmgrainlabs_perform64(t_cmgrainlabs *x, t_object *dsp64, double **ins, long
 			cm_panning(&pan_in, &pan); // calculate pan values inside the panstructure
 			
 			// WRITE PAN VALUES INTO GRAINSINFO STRUCTURE
-			x->grains[slot].pan_left = pan_in.left;
-			x->grains[slot].pan_right = pan_in.right;
+			x->grains[slot]->pan_left = pan_in.left;
+			x->grains[slot]->pan_right = pan_in.right;
 			
 			/************************************************************************************************************************/
 			// GET RANDOM PITCH
@@ -424,18 +424,18 @@ void cmgrainlabs_perform64(t_cmgrainlabs *x, t_object *dsp64, double **ins, long
 			}
 			/************************************************************************************************************************/
 			// CALCULATE THE ACTUAL GRAIN LENGTH (SAMPLES) ACCORDING TO PITCH
-			x->grains[slot].gr_length = x->grains[slot].t_length * pitch;
+			x->grains[slot]->gr_length = x->grains[slot]->t_length * pitch;
 			// CHECK THAT GRAIN LENGTH IS NOT LARGER THAN SIZE OF BUFFER
-			if (x->grains[slot].gr_length > b_framecount) {
-				x->grains[slot].gr_length = b_framecount;
+			if (x->grains[slot]->gr_length > b_framecount) {
+				x->grains[slot]->gr_length = b_framecount;
 			}
 			/************************************************************************************************************************/
 			// CHECK IF START POSITION IS LEGAL ACCORDING TO GRAINzLENGTH (SAMPLES) AND BUFFER SIZE
-			if (x->grains[slot].start > b_framecount - x->grains[slot].gr_length) {
-				x->grains[slot].start = b_framecount - x->grains[slot].gr_length;
+			if (x->grains[slot]->start > b_framecount - x->grains[slot]->gr_length) {
+				x->grains[slot]->start = b_framecount - x->grains[slot]->gr_length;
 			}
-			if (x->grains[slot].start < 0) {
-				x->grains[slot].start = 0;
+			if (x->grains[slot]->start < 0) {
+				x->grains[slot]->start = 0;
 			}
 		}
 		/************************************************************************************************************************/
@@ -460,43 +460,43 @@ void cmgrainlabs_perform64(t_cmgrainlabs *x, t_object *dsp64, double **ins, long
 				limit = x->grains_limit;
 			}
 			for (i = 0; i < limit; i++) {
-				if (x->grains[i].busy) { // if the current slot contains grain playback information
+				if (x->grains[i]->busy) { // if the current slot contains grain playback information
 					// GET WINDOW SAMPLE FROM WINDOW BUFFER
 					if (x->attr_winterp) {
-						distance = ((double)x->grains[i].grainpos / (double)x->grains[i].t_length) * (double)w_framecount;
+						distance = ((double)x->grains[i]->grainpos / (double)x->grains[i]->t_length) * (double)w_framecount;
 						w_read = cm_lininterp(distance, w_sample, w_channelcount, 0);
 					}
 					else {
-						index = (long)(((double)x->grains[i].grainpos / (double)x->grains[i].t_length) * (double)w_framecount);
+						index = (long)(((double)x->grains[i]->grainpos / (double)x->grains[i]->t_length) * (double)w_framecount);
 						w_read = w_sample[index];
 					}
 					// GET GRAIN SAMPLE FROM SAMPLE BUFFER
-					distance = x->grains[i].start + (((double)x->grains[i].grainpos++ / (double)x->grains[i].t_length) * (double)x->grains[i].gr_length);
+					distance = x->grains[i]->start + (((double)x->grains[i]->grainpos++ / (double)x->grains[i]->t_length) * (double)x->grains[i]->gr_length);
 					
 					if (b_channelcount > 1 && x->attr_stereo) { // if more than one channel
 						if (x->attr_sinterp) {
-							outsample_left += (cm_lininterp(distance, b_sample, b_channelcount, 0) * w_read) * x->grains[i].pan_left; // get interpolated sample
-							outsample_right += (cm_lininterp(distance, b_sample, b_channelcount, 1) * w_read) * x->grains[i].pan_right;
+							outsample_left += (cm_lininterp(distance, b_sample, b_channelcount, 0) * w_read) * x->grains[i]->pan_left; // get interpolated sample
+							outsample_right += (cm_lininterp(distance, b_sample, b_channelcount, 1) * w_read) * x->grains[i]->pan_right;
 						}
 						else {
-							outsample_left += (b_sample[(long)distance * b_channelcount] * w_read) * x->grains[i].pan_left;
-							outsample_right += (b_sample[((long)distance * b_channelcount) + 1] * w_read) * x->grains[i].pan_right;
+							outsample_left += (b_sample[(long)distance * b_channelcount] * w_read) * x->grains[i]->pan_left;
+							outsample_right += (b_sample[((long)distance * b_channelcount) + 1] * w_read) * x->grains[i]->pan_right;
 						}
 					}
 					else {
 						if (x->attr_sinterp) {
 							b_read = cm_lininterp(distance, b_sample, b_channelcount, 0) * w_read; // get interpolated sample
-							outsample_left += b_read * x->grains[i].pan_left;
-							outsample_right += b_read * x->grains[i].pan_right;
+							outsample_left += b_read * x->grains[i]->pan_left;
+							outsample_right += b_read * x->grains[i]->pan_right;
 						}
 						else {
-							outsample_left += (b_sample[(long)distance * b_channelcount] * w_read) * x->grains[i].pan_left;
-							outsample_right += (b_sample[(long)distance * b_channelcount] * w_read) * x->grains[i].pan_right;
+							outsample_left += (b_sample[(long)distance * b_channelcount] * w_read) * x->grains[i]->pan_left;
+							outsample_right += (b_sample[(long)distance * b_channelcount] * w_read) * x->grains[i]->pan_right;
 						}
 					}
-					if (x->grains[i].grainpos == x->grains[i].t_length) { // if current grain has reached the end position
-						x->grains[i].grainpos = 0; // reset parameters for overwrite
-						x->grains[i].busy = 0;
+					if (x->grains[i]->grainpos == x->grains[i]->t_length) { // if current grain has reached the end position
+						x->grains[i]->grainpos = 0; // reset parameters for overwrite
+						x->grains[i]->busy = 0;
 						x->grains_count--;
 						if (x->grains_count < 0) {
 							x->grains_count = 0;
@@ -593,7 +593,6 @@ void cmgrainlabs_free(t_cmgrainlabs *x) {
 	dsp_free((t_pxobject *)x); // free memory allocated for the object
 	object_free(x->buffer); // free the buffer reference
 	object_free(x->w_buffer); // free the window buffer reference
-	sysmem_freeptr(x->grains); // free memory allocated to the grains info array
 }
 
 /************************************************************************************************************************/
